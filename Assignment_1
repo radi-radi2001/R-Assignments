@@ -1,0 +1,205 @@
+book.total_volumes <- function(book) {
+  sell = sum(as.numeric(book[["ask"]][["size"]]))
+  buy = sum(book[["bid"]][["size"]])
+  
+  lst = list(bid = buy,ask = sell)
+  return(lst)
+}
+book.best_prices <- function(book) {
+  sell = matrix(unlist(book["ask"]), ncol = 3, nrow =)
+  sell = min(as.numeric(sell[,2]))
+  
+  buy = matrix(unlist(book["bid"]), ncol = 3, nrow =)
+  buy = max(as.numeric(buy[,2]))
+  
+  lst = list(bid = buy,ask = sell)
+  return(lst)
+  
+}
+book.midprice <- function(book) {
+  lst = book.best_prices(book)
+  midprice = (lst[[1]]+lst[[2]])/2
+  return(midprice)
+}
+book.spread <- function(book) {
+  lst = book.best_prices(book)
+  spread = (lst[[2]]-lst[[1]])
+  return(spread)
+}
+book.add <- function(book, message) {
+  
+  orderIdMsg = message[[1]]
+  sideMsg = message[[2]]
+  sizeMsg = message[["size"]]
+  priceMsg = message[["price"]]
+  selfMadeIndex = 1
+  
+  oid = book[[2]][[1]]
+  price = book[[2]][[2]]
+  size = book[[2]][[3]]
+  
+  bookk = book
+  bookkV2 = book
+  
+  if(sideMsg == 'S'){
+    if(priceMsg <= book.best_prices(book)[["bid"]]){
+      while(sizeMsg >= 0){
+        
+        if(priceMsg > book[[2]][["price"]][[selfMadeIndex]]){
+          
+          oid = append(book[[1]][["oid"]],orderIdMsg)
+          price = append(book[[1]][["price"]],priceMsg)
+          size = append(book[[1]][["size"]],sizeMsg)
+          df = data.frame(oid,price,size)
+          bookk[[1]] = df
+          
+          break
+        }
+        
+        messageForReduce = list(oid = book[[2]][["oid"]][[selfMadeIndex]],amount = sizeMsg)
+        bookk = book.reduce(bookk,messageForReduce)
+        sizeMsg = sizeMsg - book[[2]][["size"]][[selfMadeIndex]]
+        
+        if(sizeMsg <= 0 || length(bookk[[2]][["size"]]) == 0){
+          if(sizeMsg>0){
+            oid = append(book[[1]][["oid"]],orderIdMsg)
+            price = append(book[[1]][["price"]],priceMsg)
+            size = append(book[[1]][["size"]],sizeMsg)
+            df = data.frame(oid,price,size)
+            bookk[[1]] = df
+            
+          }
+          break
+        }
+        
+        selfMadeIndex = selfMadeIndex + 1
+        
+      }
+      book = bookk
+    }else{
+      
+      oid = book[[1]][[1]]
+      price = book[[1]][[2]]
+      size = book[[1]][[3]]
+      
+      oid <- append(oid, orderIdMsg)
+      price <- append(price, priceMsg)
+      size <- append(size, sizeMsg)
+      df = data.frame(oid,price,size)
+      book[[1]] = df
+      
+    }
+    
+  }else{
+    if(priceMsg >= book.best_prices(book)[["ask"]]){
+      
+      while(sizeMsg >= 0){
+        if(priceMsg < book[[1]][["price"]][[selfMadeIndex]]){
+          oid <- append(oid, orderIdMsg)
+          price <- append(price, priceMsg)
+          size <- append(size, sizeMsg)
+          df = data.frame(oid,price,size)
+          bookk[[2]] = df
+          break
+        }
+        messageForReduce = list(oid = book[[1]][["oid"]][[selfMadeIndex]],amount = sizeMsg)
+        bookk = book.reduce(bookk,messageForReduce)
+        sizeMsg = sizeMsg - book[[1]][["size"]][[selfMadeIndex]]
+        
+        if(sizeMsg <= 0 || length(bookk[[1]][["size"]]) == 0){
+          
+          if(sizeMsg>0){
+            
+            oid <- append(oid, orderIdMsg)
+            price <- append(price, priceMsg)
+            size <- append(size, sizeMsg)
+            df = data.frame(oid,price,size)
+            bookk[[2]] = df
+            
+          }
+          break
+        }
+        
+        selfMadeIndex = selfMadeIndex + 1
+        
+      }
+      book = bookk
+      
+    }else{
+      
+      oid <- append(oid, orderIdMsg)
+      price <- append(price, priceMsg)
+      size <- append(size, sizeMsg)
+      df = data.frame(oid,price,size)
+      book[[2]] = df
+    }
+    
+  }
+  return(book)
+}
+book.reduce <- function(book, message) {
+  
+  orderIdMessage = message[1]
+  sizeMessage = as.numeric(message[2])
+  selfMadeIndex = 1
+  lol = 1
+  foundInAsk = FALSE
+  foundInBid = FALSE
+  
+  for(i in book[[1]][[1]]){
+    if(i == orderIdMessage){
+      foundInAsk = TRUE
+      break
+    }
+    selfMadeIndex = selfMadeIndex + 1
+  }
+  
+  for(i in book[[2]][[1]]){
+    if(i == orderIdMessage){
+      foundInBid = TRUE
+      break
+    }
+    lol = lol + 1
+  }
+  
+  # ASK
+  if(foundInAsk == TRUE){
+    
+    if (book[[1]][[3]][[selfMadeIndex]] > sizeMessage){
+      
+      minus = book[[1]][[3]][[selfMadeIndex]] - sizeMessage
+      book[[1]][[3]][[selfMadeIndex]] = minus
+      
+    }else{
+      
+      oid = book[[1]][[1]][-selfMadeIndex]
+      price = book[[1]][[2]][-selfMadeIndex]
+      size = book[[1]][[3]][-selfMadeIndex]
+      df = data.frame(oid,price,size)
+      book[[1]] = df
+      
+    }
+  }
+  
+  
+  # BID
+  if(foundInBid == TRUE){
+    
+    if (book[[2]][[3]][[lol]] > sizeMessage){
+      
+      minus = book[[2]][[3]][[lol]] - sizeMessage
+      book[[2]][[3]][[lol]] = minus
+      
+    }else{
+      
+      oid = book[[2]][[1]][-lol]
+      price = book[[2]][[2]][-lol]
+      size = book[[2]][[3]][-lol]
+      df = data.frame(oid,price,size)
+      book[[2]] = df
+      
+    }
+  }
+  
+  return(book)
+}
